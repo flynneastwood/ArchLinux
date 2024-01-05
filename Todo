@@ -1,0 +1,38 @@
+﻿1.Installation des logiciels 
+	Mieux déterminer LibreOffice softwares
+		Writer
+		Impress
+		Calc
+
+2.Copie des configurations pour les logiciels
+	Blender startup scenes et template video et Nordic
+	brave bookmarks + preferences + extensions
+	OBS configuration scenes et audio
+		
+
+4. Copie des scripts bash dans /usr/bin/bash
+
+5. Appliquer les Alias dans home/.bashrc
+
+6. Configurer Shortcuts
+
+7. Configuer le git avec account et mail
+
+8. Appliquer le background et whisker icon.
+
+9. Setter le login avec le theme Nordic
+
+10. Setter les applications par defaut
+
+11 Setter les shortcuts sur le bureau
+
+12 Configurer Thunar
+
+13 Placer raccourcis sur Desktop pour app les plus utilisés. 
+
+BUGS
+	Config blender qui download de git, mais install pas correctement. souvent install dans un dossier root/Downloads. au lieu de $USER/Downloads
+	ttf-ms-fonts N<est souvent pas trouve
+	Theme nordic ne s'installe pas parce qu'on se trouve pas à la bonne place.
+	config blender theme et config a ne se fait pas correctement.
+	terminal.rc est pas copié
