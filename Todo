@@ -3,6 +3,7 @@
 		Writer
 		Impress
 		Calc
+	Blender, krita, Libre-office-fresh, engrampa, zathura, mpv, sxiv, firefix, ufw, 
 	Installer les fonts
 		ttf-dejavu ttf-liberation ttf-ubuntu-font-family noto-fonts
 
@@ -11,6 +12,7 @@
 	brave bookmarks + preferences + extensions
 	OBS configuration scenes et audio
 		
+3. Appliquer firewall avec ufw
 
 4. Copie des scripts bash dans /usr/bin/bash
 
