@@ -3,9 +3,15 @@
 		Writer
 		Impress
 		Calc
-	Blender, krita, Libre-office-fresh, engrampa, zathura, mpv, sxiv, firefix, ufw, 
+	Blender, krita, Libre-office-fresh, engrampa, zathura, zathura-pdf-poppler, imagemagick mpv, sxiv, firefix, ufw, 
 	Installer les fonts
 		ttf-dejavu ttf-liberation ttf-ubuntu-font-family noto-fonts
+	Installer yay
+		pacman -S --needed git base-devel
+		git clone https://aur.archlinux.org/yay.git
+		cd yay
+		makepkg -si
+		
 
 2.Copie des configurations pour les logiciels
 	Blender startup scenes et template video et Nordic, installer nvidia-open pour rendre GPU
