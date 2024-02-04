@@ -3,6 +3,8 @@
 		Writer
 		Impress
 		Calc
+	Installer les fonts
+		ttf-dejavu ttf-liberation ttf-ubuntu-font-family noto-fonts
 
 2.Copie des configurations pour les logiciels
 	Blender startup scenes et template video et Nordic, installer nvidia-open pour rendre GPU
