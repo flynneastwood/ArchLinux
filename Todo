@@ -14,6 +14,7 @@
 		
 
 2.Copie des configurations pour les logiciels
+	Copier scripts custom dans /usr/local/bin
 	Blender startup scenes et template video et Nordic, installer nvidia-open pour rendre GPU
 	brave bookmarks + preferences + extensions
 	OBS configuration scenes et audio
