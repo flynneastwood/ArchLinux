@@ -74,6 +74,14 @@ pacman -U --noconfirm "$pkg_file"
 popd >/dev/null
 rm -rf /tmp/paru
 
+# Resolve iptables conflict and ensure nft variant is in place
+echo "Removing legacy iptables packages..."
+# Force-remove iptables without touching dependencies
+pacman -Rdd --noconfirm iptables iptables-legacy || true
+
+echo "Installing iptables-nft to satisfy firewall dependencies..."
+pacman -S --noconfirm --needed iptables-nft
+
 # Install programs from softwareList.txt
 if [[ -f "$SOFTWARE_LIST" ]]; then
   echo "Installing packages from $SOFTWARE_LIST..."
