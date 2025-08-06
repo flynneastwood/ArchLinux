@@ -46,9 +46,9 @@ echo "Installing paru (AUR helper)..."
 pacman -S --noconfirm --needed base-devel git
 rm -rf /tmp/paru
 git clone https://aur.archlinux.org/paru.git /tmp/paru
-echo "Building and installing paru..."
+echo "Building and installing paru as $USER_NAME..."
 pushd /tmp/paru >/dev/null
-makepkg -si --noconfirm
+sudo -u "$USER_NAME" makepkg -si --noconfirm
 popd >/dev/null
 rm -rf /tmp/paru
 
