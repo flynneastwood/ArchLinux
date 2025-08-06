@@ -60,13 +60,17 @@ chsh -s /bin/zsh "$USER_NAME"
 
 # Install paru (AUR helper)
 echo "Installing paru (AUR helper)..."
-pacman -S --noconfirm --needed base-devel git
+# Ensure build dependencies for paru
+pacman -S --noconfirm --needed base-devel git rust openssl
 rm -rf /tmp/paru
 echo "Cloning paru repository as $USER_NAME..."
 sudo -u "$USER_NAME" git clone https://aur.archlinux.org/paru.git /tmp/paru
-echo "Building and installing paru..."
+echo "Building paru package as $USER_NAME..."
 pushd /tmp/paru >/dev/null
-sudo -u "$USER_NAME" makepkg -si --noconfirm
+sudo -u "$USER_NAME" makepkg --noconfirm
+# Install the built package as root without prompting
+pkg_file=$(ls /tmp/paru/*.pkg.tar.* | head -n1)
+pacman -U --noconfirm "$pkg_file"
 popd >/dev/null
 rm -rf /tmp/paru
 
