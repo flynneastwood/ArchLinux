@@ -24,13 +24,30 @@ systemctl enable --now fstrim.timer
 echo 'vm.swappiness=10' > /etc/sysctl.d/99-swappiness.conf
 sysctl --system
 
-# 4. Enable a basic firewall (ufw)
-echo "Installing and configuring UFW..."
-pacman -S --noconfirm ufw
-systemctl enable --now ufw
-ufw default deny incoming
-ufw default allow outgoing
-echo "y" | ufw enable
+# 4. Enable a basic firewall with nftables
+echo "Installing and configuring nftables..."
+pacman -S --noconfirm nftables
+cat > /etc/nftables.conf << 'EOF'
+#!/usr/sbin/nft -f
+
+# Basic firewall rules
+table inet filter {
+    chain input {
+        type filter hook input priority 0; policy drop;
+        ct state established,related accept
+        iif "lo" accept
+        # Allow SSH connections
+        tcp dport ssh accept
+    }
+    chain forward {
+        type filter hook forward priority 0; policy drop;
+    }
+    chain output {
+        type filter hook output priority 0; policy accept;
+    }
+}
+EOF
+systemctl enable --now nftables
 
 # Install NVIDIA driver and CUDA
 echo "Installing NVIDIA driver and CUDA toolkit..."
