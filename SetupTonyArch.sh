@@ -1,146 +1,121 @@
 #!/usr/bin/env bash
-# setup-arch.sh — automate Arch Linux post-install configuration
-# Run as root on a vanilla Arch install.
-
 set -euo pipefail
-IFS=$'\n\t'
 
-# Ensure we're root
+# Ensure running as root
 if [[ $EUID -ne 0 ]]; then
-  echo "Please run as root: sudo bash $0"
+  echo "This script must be run as root. Use sudo." >&2
   exit 1
 fi
 
-SCRIPT_DIR="$(pwd)"
+# The user invoking sudo
+USER_NAME="$SUDO_USER"
+USER_HOME=$(eval echo "~$USER_NAME")
+SOFTWARE_LIST="softwareList.txt"
+WALLPAPERS_DIR="$USER_HOME/Wallpapers"
 
-echo "==> 1. Update mirror list and system"
-pacman -S --noconfirm --needed reflector
-reflector --latest 20 --protocol https --sort rate --save /etc/pacman.d/mirrorlist
-pacman -Syyu --noconfirm
+# 1. Update system
+pacman -Syu --noconfirm
 
-echo "==> 2. Enable SSD TRIM"
+# 2. Enable SSD TRIM
+echo "Enabling SSD TRIM..."
 systemctl enable --now fstrim.timer
 
-echo "==> 3. Reduce swappiness"
-cat > /etc/sysctl.d/99-swappiness.conf <<EOF
-# lower swappiness for SSD
-vm.swappiness=10
-EOF
+# 3. Reduce swappiness
+echo 'vm.swappiness=10' > /etc/sysctl.d/99-swappiness.conf
+sysctl --system
 
-echo "==> 4. Enable a basic firewall (ufw)"
-pacman -S --noconfirm --needed ufw
+# 4. Enable a basic firewall (ufw)
+echo "Installing and configuring UFW..."
+pacman -S --noconfirm ufw
 systemctl enable --now ufw
 ufw default deny incoming
 ufw default allow outgoing
-ufw --force enable
+echo "y" | ufw enable
 
-echo "==> Install Zsh and make it the default shell"
-pacman -S --noconfirm --needed zsh
-# Change root shell; new users get ZSH via skeleton (below)
-chsh -s /usr/bin/zsh
+# Install NVIDIA driver and CUDA
+echo "Installing NVIDIA driver and CUDA toolkit..."
+pacman -S --noconfirm nvidia nvidia-utils cuda
 
-echo "==> Install AUR helper 'paru'"
+# Set ZSH as the default shell
+echo "Installing Zsh and setting it as default shell for $USER_NAME..."
+pacman -S --noconfirm zsh
+chsh -s /bin/zsh "$USER_NAME"
+
+# Install paru (AUR helper)
+echo "Installing paru (AUR helper)..."
 pacman -S --noconfirm --needed base-devel git
-cd /tmp
-git clone https://aur.archlinux.org/paru.git
-cd paru
+rm -rf /tmp/paru
+git clone https://aur.archlinux.org/paru.git /tmp/paru
+echo "Building and installing paru..."
+pushd /tmp/paru >/dev/null
 makepkg -si --noconfirm
-cd /
+popd >/dev/null
 rm -rf /tmp/paru
 
-echo "==> Installing packages from softwareList.txt"
-if [[ -f "${SCRIPT_DIR}/softwareList.txt" ]]; then
-  # ensure gmic before krita
-  grep -xq "krita" "${SCRIPT_DIR}/softwareList.txt" \
-    && sed -i '/krita/i gmic' "${SCRIPT_DIR}/softwareList.txt" || true
-  paru -S --noconfirm --needed - < "${SCRIPT_DIR}/softwareList.txt"
+# Install programs from softwareList.txt
+if [[ -f "$SOFTWARE_LIST" ]]; then
+  echo "Installing packages from $SOFTWARE_LIST..."
+  # Ensure gmic for Krita
+  paru -S --noconfirm gmic
+  xargs -a "$SOFTWARE_LIST" -r paru -S --noconfirm
 else
-  echo "WARNING: softwareList.txt not found in ${SCRIPT_DIR}"
+  echo "Warning: $SOFTWARE_LIST not found in $(pwd)." >&2
 fi
 
-echo "==> Installing Skeuos-Blue-Dark theme and Tela icons"
-# themes
-mkdir -p /usr/share/themes
-git clone https://github.com/daniruiz/skeuos-gtk.git /tmp/skeuos-gtk
-cp -r /tmp/skeuos-gtk/Skeuos-Blue-Dark /usr/share/themes/
-rm -rf /tmp/skeuos-gtk
-# icons
-mkdir -p /usr/share/icons
-git clone https://github.com/vinceliuice/Tela-icon-theme.git /tmp/Tela-icon-theme
-cp -r /tmp/Tela-icon-theme/Tela /usr/share/icons/
-rm -rf /tmp/Tela-icon-theme
+# Install GTK theme and icon set
+echo "Installing Skeuos-Blue-Dark theme and Tela icons..."
+git clone https://github.com/daniruiz/skeuos-gtk.git /usr/share/themes/Skeuos-Blue-Dark
+git clone https://github.com/vinceliuice/Tela-icon-theme.git /usr/share/icons/Tela
+gtk-update-icon-cache -f /usr/share/icons/Tela
 
-echo "==> Copying system-wide wallpapers"
+# Install wallpapers and set default
+echo "Copying wallpapers to /usr/share/backgrounds and setting default..."
 mkdir -p /usr/share/backgrounds
-if [[ -d "${SCRIPT_DIR}/Wallpapers" ]]; then
-  cp -r "${SCRIPT_DIR}/Wallpapers/"* /usr/share/backgrounds/
-  # set default for new users via feh in skeleton
-  echo 'feh --bg-scale /usr/share/backgrounds/AntoineFlynnWallpaper.jpg' \
-    > /etc/skel/.fehbg
+if [[ -d "$WALLPAPERS_DIR" ]]; then
+  cp -r "$WALLPAPERS_DIR/"* /usr/share/backgrounds/
+  # Install feh if not present
+  paru -S --noconfirm feh
+  feh --bg-scale /usr/share/backgrounds/AntoineFlynnWallpaper.jpg
 else
-  echo "WARNING: Wallpapers folder not found in ${SCRIPT_DIR}"
+  echo "Warning: Wallpapers directory $WALLPAPERS_DIR does not exist." >&2
 fi
 
-echo "==> Installing user fonts system-wide"
-mkdir -p /usr/local/share/fonts
-if [[ -d "${SCRIPT_DIR}/.fonts" ]]; then
-  cp -r "${SCRIPT_DIR}/.fonts/"* /usr/local/share/fonts/
-  fc-cache -fv
+# Install fonts
+echo "Copying fonts to /usr/share/fonts..."
+if [[ -d "$USER_HOME/.fonts" ]]; then
+  mkdir -p /usr/share/fonts
+  cp -r "$USER_HOME/.fonts/"* /usr/share/fonts/
+  fc-cache -f
 else
-  echo "WARNING: .fonts folder not found in ${SCRIPT_DIR}"
+  echo "Warning: Font directory $USER_HOME/.fonts not found." >&2
 fi
 
-echo "==> Configuring Blender"
-# detect installed blender version
-BL_VER=$(blender --version | head -n1 | awk '{print $2}')
-USER_BL_DIR="/root/.config/blender/$BL_VER"
-mkdir -p "$USER_BL_DIR"
+# Configure Blender user settings
+echo "Configuring Blender environment..."
+# Determine installed Blender version
+BL_VERSION=$(blender --version 2>/dev/null | head -n1 | awk '{print $2}' || echo "")
+if [[ -n "$BL_VERSION" ]]; then
+  # Copy user templates
+  mkdir -p "$USER_HOME/.config/blender/$BL_VERSION"
+  cp -r "$USER_HOME/.config/blender/blenderversion/"* "$USER_HOME/.config/blender/$BL_VERSION/" || true
 
-# copy user templates
-if [[ -d "${SCRIPT_DIR}/.config/blender/blenderversion" ]]; then
-  cp -r "${SCRIPT_DIR}/.config/blender/blenderversion/"* "$USER_BL_DIR/"
+  # Copy system app templates
+  mkdir -p "/usr/share/blender/$BL_VERSION/scripts/startup/"
+  cp -r "$USER_HOME/.config/blender/bl_app_templates_system" "/usr/share/blender/$BL_VERSION/scripts/startup/" || true
+
+  # Install Dark Wood theme preset
+  PRESET_DIR="/usr/share/blender/$BL_VERSION/scripts/presets/interface_theme"
+  mkdir -p "$PRESET_DIR"
+  cp "$USER_HOME/.config/blender/Dark_Wood.xml" "$PRESET_DIR/"
 else
-  echo "WARNING: blender blenderversion folder missing"
+  echo "Blender not found or version detection failed." >&2
 fi
 
-# system templates
-SYS_BL_DIR="/usr/share/blender/$BL_VER/scripts/startup"
-mkdir -p "$SYS_BL_DIR"
-if [[ -d "${SCRIPT_DIR}/.config/blender/bl_app_templates_system" ]]; then
-  cp -r "${SCRIPT_DIR}/.config/blender/bl_app_templates_system/"* "$SYS_BL_DIR/"
-else
-  echo "WARNING: bl_app_templates_system folder missing"
-fi
-
-# copy and install Dark_Wood.xml theme
-if [[ -f "${SCRIPT_DIR}/.config/blender/Dark_Wood.xml" ]]; then
-  BL_CONF_DIR="$USER_BL_DIR/config"
-  mkdir -p "$BL_CONF_DIR/themes"
-  cp "${SCRIPT_DIR}/.config/blender/Dark_Wood.xml" "$BL_CONF_DIR/themes/"
-  # auto-apply theme on first run
-  cat >> /etc/skel/.bash_profile <<'EOF'
-# set Blender default theme
-blender --background --python-expr "
-import bpy, os
-xp = os.path.expanduser('~/.config/blender/{ver}/config/themes/Dark_Wood.xml'.format(ver='{ver}'))
-bpy.ops.preferences.themes_install(overwrite=True, ignore_version=True, filepath=xp)
-bpy.ops.wm.save_userpref()
-"
-EOF
-else
-  echo "WARNING: Dark_Wood.xml not found"
-fi
-
-echo "==> Setting default apps (image -> sxiv, video -> mpv, PDF -> Firefox)"
-# images
-for m in image/jpeg image/png image/gif image/webp; do
-  xdg-mime default sxiv.desktop "$m"
-done
-# video
-for m in video/mp4 video/webm video/x-matroska; do
-  xdg-mime default mpv.desktop "$m"
-done
-# PDF
+# Set default applications
+echo "Setting default applications..."
+xdg-mime default sxiv.desktop image/png image/jpeg image/bmp
+xdg-mime default mpv.desktop video/mp4 video/x-matroska
 xdg-mime default firefox.desktop application/pdf
 
-echo "==> Done! Reboot when ready."
+# Done
+echo "Arch setup script complete!"
