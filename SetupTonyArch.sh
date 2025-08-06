@@ -45,8 +45,9 @@ chsh -s /bin/zsh "$USER_NAME"
 echo "Installing paru (AUR helper)..."
 pacman -S --noconfirm --needed base-devel git
 rm -rf /tmp/paru
-git clone https://aur.archlinux.org/paru.git /tmp/paru
-echo "Building and installing paru as $USER_NAME..."
+echo "Cloning paru repository as $USER_NAME..."
+sudo -u "$USER_NAME" git clone https://aur.archlinux.org/paru.git /tmp/paru
+echo "Building and installing paru..."
 pushd /tmp/paru >/dev/null
 sudo -u "$USER_NAME" makepkg -si --noconfirm
 popd >/dev/null
