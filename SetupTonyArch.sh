@@ -7,10 +7,11 @@ if [[ $EUID -ne 0 ]]; then
   exit 1
 fi
 
-# The user invoking sudo
-USER_NAME="$SUDO_USER"
+# Determine script directory and user
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+USER_NAME="${SUDO_USER:-root}"
 USER_HOME=$(eval echo "~$USER_NAME")
-SOFTWARE_LIST="softwareList.txt"
+SOFTWARE_LIST="$SCRIPT_DIR/softwareList.txt"
 WALLPAPERS_DIR="$USER_HOME/Wallpapers"
 
 # 1. Update system
@@ -30,13 +31,11 @@ pacman -S --noconfirm nftables
 cat > /etc/nftables.conf << 'EOF'
 #!/usr/sbin/nft -f
 
-# Basic firewall rules
 table inet filter {
     chain input {
         type filter hook input priority 0; policy drop;
         ct state established,related accept
         iif "lo" accept
-        # Allow SSH connections
         tcp dport ssh accept
     }
     chain forward {
@@ -60,36 +59,41 @@ chsh -s /bin/zsh "$USER_NAME"
 
 # Install paru (AUR helper)
 echo "Installing paru (AUR helper)..."
-# Ensure build dependencies for paru
 pacman -S --noconfirm --needed base-devel git rust openssl
 rm -rf /tmp/paru
-echo "Cloning paru repository as $USER_NAME..."
 sudo -u "$USER_NAME" git clone https://aur.archlinux.org/paru.git /tmp/paru
-echo "Building paru package as $USER_NAME..."
 pushd /tmp/paru >/dev/null
-sudo -u "$USER_NAME" makepkg --noconfirm
-# Install the built package as root without prompting
+sudo -u "$USER_NAME" makepkg --noconfirm --syncdeps --rmdeps
 pkg_file=$(ls /tmp/paru/*.pkg.tar.* | head -n1)
 pacman -U --noconfirm "$pkg_file"
 popd >/dev/null
 rm -rf /tmp/paru
 
+# Allow passwordless pacman for $USER_NAME so paru can install without a TTY
+echo "$USER_NAME ALL=(ALL) NOPASSWD: /usr/bin/pacman" > /etc/sudoers.d/01-paru
+chmod 440 /etc/sudoers.d/01-paru
+export PARU_USE_SUDO=true
+
 # Resolve iptables conflict and ensure nft variant is in place
 echo "Removing legacy iptables packages..."
-# Force-remove iptables without touching dependencies
-pacman -Rdd --noconfirm iptables iptables-legacy || true
+pacman -Rdd --noconfirm iptables || true
+pacman -Rdd --noconfirm iptables-legacy || true
 
 echo "Installing iptables-nft to satisfy firewall dependencies..."
 pacman -S --noconfirm --needed iptables-nft
 
-# Install programs from softwareList.txt
+# Install programs from softwareList.txt as non-root user
+echo "Installing packages listed in $SOFTWARE_LIST..."
 if [[ -f "$SOFTWARE_LIST" ]]; then
-  echo "Installing packages from $SOFTWARE_LIST..."
-  # Ensure gmic for Krita
-  paru -S --noconfirm gmic
-  xargs -a "$SOFTWARE_LIST" -r paru -S --noconfirm
+  while IFS= read -r line; do
+    # skip empty or comment lines
+    [[ -z "$line" || "$line" =~ ^# ]] && continue
+    pkg_name="${line%% *}"
+    echo "Building and installing $pkg_name..."
+    runuser -l "$USER_NAME" -c "export PARU_USE_SUDO=true && paru -S --noconfirm --needed '$pkg_name' || echo \"Warning: failed to install $pkg_name, continuing...\" >&2"
+  done < "$SOFTWARE_LIST"
 else
-  echo "Warning: $SOFTWARE_LIST not found in $(pwd)." >&2
+  echo "Warning: $SOFTWARE_LIST not found. Skipping AUR installations." >&2
 fi
 
 # Install GTK theme and icon set
@@ -103,9 +107,8 @@ echo "Copying wallpapers to /usr/share/backgrounds and setting default..."
 mkdir -p /usr/share/backgrounds
 if [[ -d "$WALLPAPERS_DIR" ]]; then
   cp -r "$WALLPAPERS_DIR/"* /usr/share/backgrounds/
-  # Install feh if not present
-  paru -S --noconfirm feh
-  feh --bg-scale /usr/share/backgrounds/AntoineFlynnWallpaper.jpg
+  runuser -l "$USER_NAME" -c "export PARU_USE_SUDO=true && paru -S --noconfirm --needed feh"
+  runuser -l "$USER_NAME" -c "feh --bg-scale /usr/share/backgrounds/AntoineFlynnWallpaper.jpg"
 else
   echo "Warning: Wallpapers directory $WALLPAPERS_DIR does not exist." >&2
 fi
@@ -122,18 +125,12 @@ fi
 
 # Configure Blender user settings
 echo "Configuring Blender environment..."
-# Determine installed Blender version
 BL_VERSION=$(blender --version 2>/dev/null | head -n1 | awk '{print $2}' || echo "")
 if [[ -n "$BL_VERSION" ]]; then
-  # Copy user templates
   mkdir -p "$USER_HOME/.config/blender/$BL_VERSION"
   cp -r "$USER_HOME/.config/blender/blenderversion/"* "$USER_HOME/.config/blender/$BL_VERSION/" || true
-
-  # Copy system app templates
   mkdir -p "/usr/share/blender/$BL_VERSION/scripts/startup/"
   cp -r "$USER_HOME/.config/blender/bl_app_templates_system" "/usr/share/blender/$BL_VERSION/scripts/startup/" || true
-
-  # Install Dark Wood theme preset
   PRESET_DIR="/usr/share/blender/$BL_VERSION/scripts/presets/interface_theme"
   mkdir -p "$PRESET_DIR"
   cp "$USER_HOME/.config/blender/Dark_Wood.xml" "$PRESET_DIR/"
@@ -147,5 +144,4 @@ xdg-mime default sxiv.desktop image/png image/jpeg image/bmp
 xdg-mime default mpv.desktop video/mp4 video/x-matroska
 xdg-mime default firefox.desktop application/pdf
 
-# Done
 echo "Arch setup script complete!"
