@@ -12,7 +12,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 USER_NAME="${SUDO_USER:-root}"
 USER_HOME=$(eval echo "~$USER_NAME")
 SOFTWARE_LIST="$SCRIPT_DIR/softwareList.txt"
-WALLPAPERS_DIR="$USER_HOME/Wallpapers"
+
 
 # 1. Update system
 pacman -Syu --noconfirm
@@ -96,52 +96,126 @@ else
   echo "Warning: $SOFTWARE_LIST not found. Skipping AUR installations." >&2
 fi
 
-# Install GTK theme and icon set
-echo "Installing Skeuos-Blue-Dark theme and Tela icons..."
-git clone https://github.com/daniruiz/skeuos-gtk.git /usr/share/themes/Skeuos-Blue-Dark
-git clone https://github.com/vinceliuice/Tela-icon-theme.git /usr/share/icons/Tela
-gtk-update-icon-cache -f /usr/share/icons/Tela
+# Install GTK theme and icon set (user-level, from scratch)
+echo "Installing Skeuos theme and Tela icons to the user's home..."
 
-# Install wallpapers and set default
-echo "Copying wallpapers to /usr/share/backgrounds and setting default..."
-mkdir -p /usr/share/backgrounds
-if [[ -d "$WALLPAPERS_DIR" ]]; then
-  cp -r "$WALLPAPERS_DIR/"* /usr/share/backgrounds/
-  runuser -l "$USER_NAME" -c "export PARU_USE_SUDO=true && paru -S --noconfirm --needed feh"
-  runuser -l "$USER_NAME" -c "feh --bg-scale /usr/share/backgrounds/AntoineFlynnWallpaper.jpg"
-else
-  echo "Warning: Wallpapers directory $WALLPAPERS_DIR does not exist." >&2
-fi
+# --- Configurable names ---
+THEME_NAME="Skeuos-Blue-Dark"   # e.g., Skeuos-Blue-Light, Skeuos-Blue-Dark
+ICON_NAME="Tela-dark"           # e.g., Tela, Tela-dark, etc.
 
-# Install fonts
-echo "Copying fonts to /usr/share/fonts..."
-if [[ -d "$USER_HOME/.fonts" ]]; then
-  mkdir -p /usr/share/fonts
-  cp -r "$USER_HOME/.fonts/"* /usr/share/fonts/
-  fc-cache -f
-else
-  echo "Warning: Font directory $USER_HOME/.fonts not found." >&2
-fi
+# Users to apply theming to (include the invoking sudo user + extra accounts)
+THEME_USERS=("$USER_NAME" "tony")
 
-# Configure Blender user settings
-echo "Configuring Blender environment..."
-BL_VERSION=$(blender --version 2>/dev/null | head -n1 | awk '{print $2}' || echo "")
-if [[ -n "$BL_VERSION" ]]; then
-  mkdir -p "$USER_HOME/.config/blender/$BL_VERSION"
-  cp -r "$USER_HOME/.config/blender/blenderversion/"* "$USER_HOME/.config/blender/$BL_VERSION/" || true
-  mkdir -p "/usr/share/blender/$BL_VERSION/scripts/startup/"
-  cp -r "$USER_HOME/.config/blender/bl_app_templates_system" "/usr/share/blender/$BL_VERSION/scripts/startup/" || true
-  PRESET_DIR="/usr/share/blender/$BL_VERSION/scripts/presets/interface_theme"
-  mkdir -p "$PRESET_DIR"
-  cp "$USER_HOME/.config/blender/Dark_Wood.xml" "$PRESET_DIR/"
-else
-  echo "Blender not found or version detection failed." >&2
-fi
+TMP_THEMES="$(mktemp -d)"
+trap 'rm -rf "$TMP_THEMES"' EXIT
+chmod 755 "$TMP_THEMES" # allow non-root user to traverse this temp dir
 
-# Set default applications
-echo "Setting default applications..."
-xdg-mime default sxiv.desktop image/png image/jpeg image/bmp
-xdg-mime default mpv.desktop video/mp4 video/x-matroska
-xdg-mime default firefox.desktop application/pdf
+# Clone Skeuos once
+rm -rf "$TMP_THEMES/skeuos"
+git clone --depth 1 https://github.com/daniruiz/skeuos-gtk.git "$TMP_THEMES/skeuos"
+SKEUOS_SRC=$(find "$TMP_THEMES/skeuos" -maxdepth 2 -type d -name "$THEME_NAME" | head -n1 || true)
+
+# Iterate over target users and install per-user
+for U in "${THEME_USERS[@]}"; do
+  # Skip if user doesn't exist
+  if ! id -u "$U" >/dev/null 2>&1; then
+    echo "Warning: user $U not found; skipping theming for this user." >&2
+    continue
+  fi
+  U_HOME=$(eval echo "~$U" 2>/dev/null || true)
+  if [[ -z "$U_HOME" || ! -d "$U_HOME" ]]; then
+    echo "Warning: home directory for $U not found; skipping." >&2
+    continue
+  fi
+
+  # Ensure user theme/icon dirs exist with correct ownership
+  sudo -u "$U" mkdir -p "$U_HOME/.themes" "$U_HOME/.icons"
+  chown -R "$U:$U" "$U_HOME/.themes" "$U_HOME/.icons"
+
+  # --- Install Skeuos GTK theme into user's ~/.themes ---
+  if [[ -d "$SKEUOS_SRC" ]]; then
+    rm -rf "$U_HOME/.themes/$THEME_NAME"
+    cp -r "$SKEUOS_SRC" "$U_HOME/.themes/"
+    chown -R "$U:$U" "$U_HOME/.themes/$THEME_NAME"
+  else
+    echo "Warning: Could not locate $THEME_NAME in Skeuos repo." >&2
+  fi
+
+  # --- Install Tela icons into user's ~/.icons via upstream installer ---
+  # Ensure ~/.icons is a directory and remove any existing Tela icon dirs safely
+  runuser -l "$U" -s /bin/bash -c '
+    set -euo pipefail
+    if [ -e "$HOME/.icons" ] && [ ! -d "$HOME/.icons" ]; then rm -f "$HOME/.icons"; fi
+    mkdir -p "$HOME/.icons"
+    find "$HOME/.icons" -maxdepth 1 -mindepth 1 -name "Tela*" -exec rm -rf {} +
+  '
+
+  # Clone & run Tela installer entirely as the target user so permissions are correct
+  runuser -l "$U" -s /bin/bash -c '
+    set -euo pipefail
+    TMP_DIR=$(mktemp -d)
+    git clone --depth 1 https://github.com/vinceliuice/Tela-icon-theme.git "$TMP_DIR/Tela-icon-theme"
+    bash "$TMP_DIR/Tela-icon-theme/install.sh" -d "$HOME/.icons"
+    rm -rf "$TMP_DIR"
+  ' || echo "Warning: Tela installer failed for $U — continuing..." >&2
+
+  # Apply theme and icon settings (XFCE offline) for this user
+  # Ensure ~/.config exists and is owned by the user
+  install -d -m 700 -o "$U" -g "$U" "$U_HOME/.config"
+  CFG="$U_HOME/.config/xfce4/xfconf/xfce-perchannel-xml/xsettings.xml"
+  # Use Tela-dark; if it doesn't exist, fall back to Tela
+  ICON_FOR_USER="$ICON_NAME"
+  if [[ ! -d "$U_HOME/.icons/$ICON_FOR_USER" && ! -d "/usr/share/icons/$ICON_FOR_USER" ]]; then
+    if [[ -d "$U_HOME/.icons/Tela" || -d "/usr/share/icons/Tela" ]]; then
+      ICON_FOR_USER="Tela"
+    fi
+  fi
+  install -d -o "$U" -g "$U" "$(dirname "$CFG")"
+  cat > "$CFG" <<EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<channel name="xsettings" version="1.0">
+  <property name="Net" type="empty">
+    <property name="ThemeName" type="string" value="$THEME_NAME"/>
+    <property name="IconThemeName" type="string" value="$ICON_FOR_USER"/>
+  </property>
+</channel>
+EOF
+  chown -R "$U:$U" "$U_HOME/.config/xfce4"
+
+  # GTK fallback settings for stubborn sessions (affects many apps directly)
+  install -d -m 700 -o "$U" -g "$U" "$U_HOME/.config/gtk-3.0"
+  cat > "$U_HOME/.config/gtk-3.0/settings.ini" <<EOF
+[Settings]
+gtk-theme-name=$THEME_NAME
+gtk-icon-theme-name=$ICON_FOR_USER
+EOF
+  chown -R "$U:$U" "$U_HOME/.config/gtk-3.0"
+
+  # GTK2 fallback (some XFCE bits/plugins still read this)
+  echo -e "gtk-theme-name=\"$THEME_NAME\"
+gtk-icon-theme-name=\"$ICON_FOR_USER\"" > "$U_HOME/.gtkrc-2.0"
+  chown "$U:$U" "$U_HOME/.gtkrc-2.0"
+
+
+  echo "Applied $THEME_NAME + $ICON_FOR_USER for user $U"
+done
+
+# Set default applications per user (avoid writing to /root)
+echo "Setting default applications per user..."
+for U in "${THEME_USERS[@]}"; do
+  if ! id -u "$U" >/dev/null 2>&1; then continue; fi
+
+  # Choose available .desktop files safely
+  IMG=""; for d in nsxiv.desktop sxiv.desktop imv.desktop ristretto.desktop eog.desktop org.gnome.eog.desktop; do [[ -f "/usr/share/applications/$d" ]] && IMG="$d" && break; done
+  VID=""; for d in mpv.desktop vlc.desktop parole.desktop; do [[ -f "/usr/share/applications/$d" ]] && VID="$d" && break; done
+  PDF=""; for d in firefox.desktop org.pwmt.zathura.desktop org.gnome.Evince.desktop evince.desktop; do [[ -f "/usr/share/applications/$d" ]] && PDF="$d" && break; done
+
+  runuser -l "$U" -s /bin/bash -c "\
+    mkdir -p \"$HOME/.config\"; \
+    ${IMG:+xdg-mime default $IMG image/png image/jpeg image/bmp || true}; \
+    ${VID:+xdg-mime default $VID video/mp4 video/x-matroska || true}; \
+    ${PDF:+xdg-mime default $PDF application/pdf || true} \
+  "
+done
 
 echo "Arch setup script complete!"
