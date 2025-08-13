@@ -479,7 +479,23 @@ su - tony -c '
   mkdir -p ~/.cache
   [ -d ~/.cache/sessions ] && mv ~/.cache/sessions ~/.cache/sessions.bak.$(date +%s)
 '
+# ---------------------------------------------------------------------------
+# Install custom fonts from $SCRIPT_DIR/fonts to /usr/local/share/fonts
+# ---------------------------------------------------------------------------
+FONTS_SRC="$SCRIPT_DIR/fonts"
+FONTS_DEST="/usr/local/share/fonts"
 
+if [[ -d "$FONTS_SRC" ]]; then
+  echo "Installing custom fonts from $FONTS_SRC..."
+  install -d -m 755 -o root -g root "$FONTS_DEST"
+  cp -a --no-preserve=ownership "$FONTS_SRC"/. "$FONTS_DEST"/
+  chown -R root:root "$FONTS_DEST"
+  # Refresh font cache
+  fc-cache -f "$FONTS_DEST" >/dev/null 2>&1
+  echo "Fonts installed to $FONTS_DEST and cache updated."
+else
+  echo "Note: $FONTS_SRC not found; skipping font installation."
+fi
 
 # Set default applications per user (avoid writing to /root)
 echo "Setting default applications per user..."
