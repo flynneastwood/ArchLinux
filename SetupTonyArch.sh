@@ -57,22 +57,108 @@ echo "Installing Zsh and setting it as default shell for $USER_NAME..."
 pacman -S --noconfirm zsh
 chsh -s /bin/zsh "$USER_NAME"
 
-# Install paru (AUR helper)
-echo "Installing paru (AUR helper)..."
-pacman -S --noconfirm --needed base-devel git rust openssl
-rm -rf /tmp/paru
-sudo -u "$USER_NAME" git clone https://aur.archlinux.org/paru.git /tmp/paru
-pushd /tmp/paru >/dev/null
-sudo -u "$USER_NAME" makepkg --noconfirm --syncdeps --rmdeps
-pkg_file=$(ls /tmp/paru/*.pkg.tar.* | head -n1)
-pacman -U --noconfirm "$pkg_file"
-popd >/dev/null
-rm -rf /tmp/paru
+# ---------------------------------------------------------------------------
+# Install paru (AUR helper) with retries + IPv4 tarball + GitHub cargo fallback
+# ---------------------------------------------------------------------------
+if command -v paru >/dev/null 2>&1; then
+  echo "paru already installed; skipping."
+else
+  echo "Installing paru (AUR helper)..."
+  pacman -S --noconfirm --needed base-devel git rust cargo openssl ca-certificates curl
 
-# Allow passwordless pacman for $USER_NAME so paru can install without a TTY
-echo "$USER_NAME ALL=(ALL) NOPASSWD: /usr/bin/pacman" > /etc/sudoers.d/01-paru
-chmod 440 /etc/sudoers.d/01-paru
-export PARU_USE_SUDO=true
+  # TLS/time sanity (helps with flaky cert errors)
+  update-ca-trust || true
+  timedatectl set-ntp true || true
+
+  # Create a private working dir OWNED BY THE REAL USER (avoids /tmp perms issues)
+  PARU_TMP="$(sudo -u "$USER_NAME" mktemp -d -p /tmp paru.XXXXXXXX)"
+  echo "Using temp dir: $PARU_TMP"
+
+  # Build under the user's temp dir; write an absolute path to $PARU_TMP/pkgpath.txt
+  sudo -u "$USER_NAME" env PARU_TMP="$PARU_TMP" bash -eu -o pipefail -c '
+    set -euo pipefail
+    tmpdir="$PARU_TMP/work"
+    mkdir -p "$tmpdir"
+
+    try_git_clone() {
+      echo "[paru] Trying AUR git clone…"
+      for i in 1 2; do
+        if git clone --depth 1 https://aur.archlinux.org/paru.git "$tmpdir/paru"; then
+          return 0
+        fi
+        echo "[paru] git clone failed (attempt $i). Retrying in 3s…"
+        sleep 3
+        rm -rf "$tmpdir/paru"
+      done
+      return 1
+    }
+
+    try_aur_tarball() {
+      echo "[paru] Trying AUR snapshot tarball via curl (IPv4)…"
+      mkdir -p "$tmpdir"
+      rm -rf "$tmpdir/paru"
+      if curl -fsSL --ipv4 https://aur.archlinux.org/cgit/aur.git/snapshot/paru.tar.gz \
+        | tar -xz -C "$tmpdir"; then
+        [ -d "$tmpdir/paru" ] && return 0
+      fi
+      return 1
+    }
+
+    try_github_build() {
+      echo "[paru] AUR unreachable. Falling back to GitHub + cargo build…"
+      rm -rf "$tmpdir/paru"
+      if git clone --depth 1 https://github.com/Morganamilo/paru "$tmpdir/paru"; then
+        ( cd "$tmpdir/paru" && cargo build --release )
+        install -Dm755 "$tmpdir/paru/target/release/paru" "$PARU_TMP/paru-bin"
+        # Signal root to install a raw binary
+        printf "__BIN__%s\n" "$PARU_TMP/paru-bin" > "$PARU_TMP/pkgpath.txt"
+        return 0
+      fi
+      return 1
+    }
+
+    if try_git_clone || try_aur_tarball; then
+      cd "$tmpdir/paru"
+      # Force rebuild in case of partials; pull build deps automatically
+      makepkg --noconfirm --syncdeps --rmdeps -f
+      # Record absolute path to the built package for root to pacman -U
+      shopt -s nullglob
+      artifacts=( "$PWD"/*.pkg.tar.* )
+      if (( ${#artifacts[@]} == 0 )); then
+        echo "[paru] No package artifact found after makepkg." >&2
+        exit 1
+      fi
+      printf "%s\n" "${artifacts[0]}" > "$PARU_TMP/pkgpath.txt"
+    else
+      try_github_build || { echo "[paru] All install methods failed." >&2; exit 1; }
+    fi
+  '
+
+  # Install either the PKG or the raw binary, then clean up
+  if [[ -f "$PARU_TMP/pkgpath.txt" ]]; then
+    P="$(cat "$PARU_TMP/pkgpath.txt")"
+    if [[ "$P" == __BIN__* ]]; then
+      BIN="${P#__BIN__}"
+      install -Dm755 "$BIN" /usr/local/bin/paru
+      echo "Installed paru to /usr/local/bin/paru (GitHub fallback)."
+    else
+      pacman -U --noconfirm "$P"
+      echo "Installed paru from AUR package: $(basename "$P")"
+    fi
+  else
+    echo "Error: could not determine paru build artifact." >&2
+    rm -rf "$PARU_TMP"
+    exit 1
+  fi
+
+  # Allow passwordless pacman for $USER_NAME so paru can install without a TTY
+  echo "$USER_NAME ALL=(ALL) NOPASSWD: /usr/bin/pacman" > /etc/sudoers.d/01-paru
+  chmod 440 /etc/sudoers.d/01-paru
+  export PARU_USE_SUDO=true
+
+  # Clean
+  rm -rf "$PARU_TMP"
+fi
 
 # Resolve iptables conflict and ensure nft variant is in place
 echo "Removing legacy iptables packages..."
