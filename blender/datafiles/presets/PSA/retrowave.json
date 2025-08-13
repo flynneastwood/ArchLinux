@@ -1,0 +1,72 @@
+{
+    "atmosphere": {
+        "azimuth": 0.6920227408409119,
+        "elevation": -1.519046664237976,
+        "clouds_scale": 10.0,
+        "sun_diameter": 0.10471975803375244,
+        "sun_temperature": 3000.0,
+        "sun_intensity": 800000.0,
+        "atmosphere_density": 1.7999999523162842,
+        "atmosphere_height": 1000.0,
+        "atmosphere_intensity": 3.0,
+        "atmosphere_color": [
+            0.6105382442474365,
+            0.753007709980011,
+            0.9999242424964905,
+            1.0
+        ],
+        "atmosphere_inscattering": [
+            0.1284993588924408,
+            0.0,
+            0.6666601300239563,
+            1.0
+        ],
+        "atmosphere_extinction": [
+            0.7399935126304626,
+            0.655235230922699,
+            0.27114567160606384,
+            1.0
+        ],
+        "atmosphere_mie": 0.5,
+        "atmosphere_mie_dir": 0.8999999761581421,
+        "night_intensity": 0.019999999552965164,
+        "stars_intensity": 12.0,
+        "stars_gamma": 0.6000000238418579,
+        "ground_albedo": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+        ],
+        "ground_offset": -1.0,
+        "atmosphere_distance": 1.0,
+        "atmosphere_falloff": 0.848051905632019,
+        "sun_radiance_gamma": 1.0,
+        "enable_binary_sun": 0,
+        "sun_disk": 1,
+        "sun_lamp": 1,
+        "clouds_thickness": 1000.0,
+        "clouds_max": 0.6000000238418579,
+        "clouds_lighting_intensity": 4.0,
+        "clouds_amount": 10.0,
+        "clouds_power": 20.0,
+        "clouds_scattering": [
+            0.8206183314323425,
+            0.8744710683822632,
+            1.0,
+            1.0
+        ],
+        "clouds_rotation": [
+            0.0,
+            0.0,
+            0.0
+        ]
+    },
+    "sun": {
+        "rotation_euler": [
+            -1.519046664237976,
+            0.0,
+            0.6920227408409119
+        ]
+    }
+}

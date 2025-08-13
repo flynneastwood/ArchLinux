@@ -1,0 +1,18 @@
+{
+    "atmosphere": {
+        "azimuth": 0.6920227408409119,
+        "elevation": -1.519046664237976,
+        "clouds_scale": 2.0,
+        "enable_binary_sun": 0,
+        "ground_visible": 1,
+        "clouds_min": -0.800000011920929,
+        "clouds_max": 0.800000011920929
+    },
+    "sun": {
+        "rotation_euler": [
+            -1.519046664237976,
+            0.0,
+            0.6920227408409119
+        ]
+    }
+}

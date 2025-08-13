@@ -1,0 +1,52 @@
+Input ▸ Geometry
+Vector Math ▸ Add
+Input ▸ Bevel
+Vector ▸ Normal
+Vector ▸ Mapping
+Quick Favorites (Q) ▸ Decimate
+Generate ▸ Decimate
+Shader ▸ Glass BSDF
+ 0 SkyAtmosphere
+0 Render Raw
+0 Render Raw.001
+0 Render Raw.002
+0 Render Raw.003
+Output ▸ Composite
+Group ▸ LensDistortion
+Transform ▸ Lens Distortion
+ 0 cloud_layers
+ 0 rural_crossroads
+ 0 lythwood_terrace
+ 0 nagoya_wall_path
+ 0 reichstag_1
+ F WorldHDR
+ F cloud_layers
+ F rural_crossroads
+Generate ▸ Edge Split
+  Scene.001
+   Steel.001
+Input ▸ RGB
+Shader ▸ Volume Scatter
+Displacement ▸ Displacement
+Texture ▸ Noise Texture
+Color Ramp ▸ Fac
+Texture ▸ Image Texture
+   Grunge_13.jpg
+Converter ▸ Mix
+Converter ▸ Color Ramp
+Color ▸ Mix Color
+Color ▸ Mix Color ▸ Hue
+Color ▸ Hue/Saturation/Value
+Color ▸ RGB Curves
+transform.vertex_random ▸ Randomize
+
+ F sunrise.exr
+Blender ▸ About Blender
+Shader ▸ Metallic BSDF
+Shader ▸ Principled BSDF
+Generate ▸ Bevel
+ F interior.exr
+  Fin
+  Debut
+Add (Shift A) ▸ Input ▸ Image Sequence
+Color ▸ Convert Colorspace

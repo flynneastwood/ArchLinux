@@ -1,0 +1,12 @@
+[Bookmarks]
+[Recent]
+/home/tony/Travail2/Youtube/AntoineFlynn/_Branding/FlynnEastwoodIntroOutroLogo/FlynnEastwoodIntroOutroLogo/Renders/Fin/Comped/
+/home/tony/Travail2/Youtube/AntoineFlynn/_Branding/FlynnEastwoodIntroOutroLogo/FlynnEastwoodIntroOutroLogo/Endscreen/
+/home/tony/Travail2/Youtube/AntoineFlynn/_Branding/FlynnEastwoodIntroOutroLogo/FlynnEastwoodIntroOutroLogo/Export/
+/home/tony/Travail2/Youtube/AntoineFlynn/_Branding/FlynnEastwoodIntroOutroLogo/FlynnEastwoodIntroOutroLogo/Blender/
+/home/tony/Travail2/Youtube/AntoineFlynn/_Branding/FlynnEastwoodIntroOutroLogo/FlynnEastwoodIntroOutroLogo/Renders/Fin/V02/
+/home/tony/Documents/Youtube/MaterialFunctions/
+/home/tony/Documents/FreelanceDemoreel/Exports/
+/home/tony/Documents/FreelanceDemoreel/Blender/Renders/Comped/
+/home/tony/Documents/FreelanceDemoreel/Blender/Scenes/
+/home/tony/.fonts/Roboto/static/

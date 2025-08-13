@@ -1,0 +1,42 @@
+{
+    "atmosphere": {
+        "azimuth": 0.6920227408409119,
+        "elevation": -1.519046664237976,
+        "clouds_scale": 6.0,
+        "enable_binary_sun": 0,
+        "ground_visible": 1,
+        "clouds_min": -1.0,
+        "clouds_max": 1.0,
+        "atmosphere_density": 4.0,
+        "atmosphere_height": 2000.0,
+        "atmosphere_color": [
+            0.44728246331214905,
+            0.4412381052970886,
+            0.4533268213272095,
+            1.0
+        ],
+        "atmosphere_extinction": [
+            0.9133267998695374,
+            0.8898541927337646,
+            0.8524383306503296,
+            1.0
+        ],
+        "atmosphere_inscattering": [
+            0.04781267046928406,
+            0.07159236818552017,
+            0.13332682847976685,
+            1.0
+        ],
+        "atmosphere_distance": 3.0,
+        "atmosphere_falloff": 1.0,
+        "clouds_thickness": 1.0,
+        "stars_intensity": 0.019999999552965164
+    },
+    "sun": {
+        "rotation_euler": [
+            -1.519046664237976,
+            0.0,
+            0.6920227408409119
+        ]
+    }
+}

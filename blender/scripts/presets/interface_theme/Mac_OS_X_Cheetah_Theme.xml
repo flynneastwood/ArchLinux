@@ -1,0 +1,26 @@
+<?xml version="1.0" ?>
+<Theme name="Mac_OS_X_Cheetah">
+  <user_interface>
+    <wcol_regular r="0.9490" g="0.9490" b="0.9490"/>
+    <wcol_hover r="1.0000" g="1.0000" b="1.0000"/>
+    <wcol_active r="0.8549" g="0.8549" b="0.8549"/>
+    <wcol_outline r="0.3725" g="0.6235" b="1.0000"/>
+    <menu_back r="1.0000" g="1.0000" b="1.0000"/>
+    <panel r="0.9490" g="0.9490" b="0.9490"/>
+    <header r="0.8549" g="0.8549" b="0.8549"/>
+    <text r="0.1020" g="0.1020" b="0.1020"/>
+    <text_hi r="0.2314" g="0.5216" b="1.0000"/>
+    <text_muted r="0.3529" g="0.3529" b="0.3529"/>
+  </user_interface>
+  <view_3d>
+    <back r="0.9098" g="0.9098" b="0.9098"/>
+    <grid r="0.8157" g="0.8157" b="0.8157"/>
+    <object_selected r="0.2314" g="0.5216" b="1.0000"/>
+    <object_active r="0.3725" g="0.6235" b="1.0000"/>
+  </view_3d>
+  <properties>
+    <tab_active r="1.0000" g="1.0000" b="1.0000"/>
+    <tab_inactive r="0.8549" g="0.8549" b="0.8549"/>
+    <panel_border r="0.7451" g="0.7451" b="0.7451"/>
+  </properties>
+</Theme>
