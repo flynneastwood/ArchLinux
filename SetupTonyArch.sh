@@ -96,6 +96,67 @@ else
   echo "Warning: $SOFTWARE_LIST not found. Skipping AUR installations." >&2
 fi
 
+# ---------------------------------------------------------------------------
+# Deploy XFCE + Thunar dotfiles for all users from the script directory
+# - Expects: $SCRIPT_DIR/xfce4/ and (optionally) accels.scm, renamerrc, uca.xml
+# - Copies to: ~/.config/xfce4 and ~/.config/Thunar/*. (creates timestamped backups)
+# ---------------------------------------------------------------------------
+echo "Deploying XFCE and Thunar dotfiles to all users..."
+
+TS="$(date +%Y%m%d-%H%M%S)"
+XFCE_SRC="$SCRIPT_DIR/xfce4"
+THUNAR_SRC_FILES=(accels.scm renamerrc uca.xml)
+
+# Build user list: all human users (uid>=1000) + root, with valid shells and homes
+mapfile -t ALL_USERS < <(
+  awk -F: '($3>=1000 || $1=="root") && $7 !~ /(nologin|false)$/ {print $1}' /etc/passwd
+)
+
+for U in "${ALL_USERS[@]}"; do
+  # Skip users without a home dir
+  U_HOME=$(eval echo "~$U" 2>/dev/null || true)
+  if [[ -z "$U_HOME" || ! -d "$U_HOME" ]]; then
+    echo "Warning: home for $U not found; skipping dotfiles." >&2
+    continue
+  fi
+
+  # Ensure ~/.config exists and is private
+  install -d -m 700 -o "$U" -g "$U" "$U_HOME/.config"
+
+  # --- XFCE channel configs (~/.config/xfce4) ---
+  if [[ -d "$XFCE_SRC" ]]; then
+    DEST_XFCE="$U_HOME/.config/xfce4"
+    if [[ -e "$DEST_XFCE" ]]; then
+      echo "Backing up existing $DEST_XFCE -> ${DEST_XFCE}.bak.$TS"
+      mv "$DEST_XFCE" "${DEST_XFCE}.bak.$TS"
+    fi
+    # Copy tree and fix ownership
+    cp -a "$XFCE_SRC" "$U_HOME/.config/"
+    chown -R "$U:$U" "$U_HOME/.config/xfce4"
+    echo "Installed XFCE config for $U"
+  else
+    echo "Note: $XFCE_SRC not found; skipping XFCE config copy." >&2
+  fi
+
+  # --- Thunar config files (~/.config/Thunar/{accels.scm,renamerrc,uca.xml}) ---
+  THUNAR_DIR="$U_HOME/.config/Thunar"
+  install -d -m 700 -o "$U" -g "$U" "$THUNAR_DIR"
+
+  for f in "${THUNAR_SRC_FILES[@]}"; do
+    SRC="$SCRIPT_DIR/$f"
+    DEST="$THUNAR_DIR/$f"
+    [[ -f "$SRC" ]] || { echo "Note: $SRC not found; skipping." >&2; continue; }
+
+    if [[ -e "$DEST" ]]; then
+      echo "Backing up existing $DEST -> ${DEST}.bak.$TS"
+      mv "$DEST" "${DEST}.bak.$TS"
+    fi
+
+    cp -a "$SRC" "$DEST"
+    chown "$U:$U" "$DEST"
+    echo "Installed Thunar $(basename "$DEST") for $U"
+  done
+done
 # Install GTK theme and icon set (user-level, from scratch)
 echo "Installing Skeuos theme and Tela icons to the user's home..."
 
