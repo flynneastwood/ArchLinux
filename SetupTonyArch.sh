@@ -347,6 +347,140 @@ gtk-icon-theme-name=\"$ICON_FOR_USER\"" > "$U_HOME/.gtkrc-2.0"
   echo "Applied $THEME_NAME + $ICON_FOR_USER for user $U"
 done
 
+# ------------------------- Blender deploy (tony) -------------------------
+# This script ONLY touches:
+#   - /home/tony/.config/blender/<ver>/{config,datafiles,scripts}
+#   - /usr/share/blender/bl_app_templates_system
+# Nothing else. No env, no XFCE files, no services.
+
+set +e  # we trap and print clearer errors per step
+TS="$(date +%Y%m%d-%H%M%S)"
+BLENDER_SRC="$SCRIPT_DIR/blender"
+TONY="tony"
+
+fatal(){ echo "ERROR: $*" >&2; exit 1; }
+note(){  echo "==> $*"; }
+
+# 0) Preconditions
+id -u "$TONY" >/dev/null 2>&1 || fatal "User '$TONY' not found."
+TONY_HOME=$(eval echo "~$TONY")
+[[ -d "$TONY_HOME" ]] || fatal "Home for '$TONY' not found at $TONY_HOME."
+[[ -d "$BLENDER_SRC" ]] || fatal "Source dir missing: $BLENDER_SRC (expected blender/ next to script)."
+
+# 1) Detect Blender version (major.minor) without changing environment
+detect_bl_ver() {
+  local v=""
+  if command -v blender >/dev/null 2>&1; then
+    # e.g. "Blender 4.1.1" -> "4.1"
+    v="$(blender -v 2>/dev/null | awk 'NR==1{for(i=1;i<=NF;i++) if($i~/^[0-9]+\.[0-9]+/) {print $i; exit}}' | cut -d. -f1,2)"
+  fi
+  # fallback to system share
+  [[ -n "$v" ]] || v="$(ls -1d /usr/share/blender/* 2>/dev/null | sed -n 's#.*/\([0-9]\+\.[0-9]\+\).*#\1#p' | sort -V | tail -n1)"
+  # final fallback: 4.0 (doesn't create anything global; just a user dir)
+  echo "${v:-4.0}"
+}
+BL_VER="$(detect_bl_ver)"
+note "Target Blender version: $BL_VER"
+
+# 2) Resolve source subdirs. If you ship versioned payload (blender/4.1/...), prefer it.
+if compgen -G "$BLENDER_SRC/[0-9]*.[0-9]*" >/dev/null; then
+  SRC_VER_DIR="$(ls -1d "$BLENDER_SRC"/[0-9]*.[0-9]* 2>/dev/null | sort -V | tail -n1)"
+  SRC_CFG="$SRC_VER_DIR/config"
+  SRC_DATA="$SRC_VER_DIR/datafiles"
+  SRC_SCRIPTS="$SRC_VER_DIR/scripts"
+else
+  SRC_CFG="$BLENDER_SRC/config"
+  SRC_DATA="$BLENDER_SRC/datafiles"
+  SRC_SCRIPTS="$BLENDER_SRC/scripts"
+fi
+
+# 3) Destination paths (user)
+DEST_BASE="$TONY_HOME/.config/blender/$BL_VER"
+DEST_CFG="$DEST_BASE/config"
+DEST_DATA="$DEST_BASE/datafiles"
+DEST_SCRIPTS="$DEST_BASE/scripts"
+
+# Helper: copy tree as the user, preserving attrs; no rsync dependency required
+copy_tree_user() { # src dest user
+  local src="$1" dest="$2" u="$3"
+  [[ -d "$src" ]] || { note "Source missing, skipping: $src"; return 0; }
+  # Backup existing dest atomically if present
+  if [[ -e "$dest" ]]; then
+    note "Backing up $dest -> ${dest}.bak.$TS"
+    mv -f -- "$dest" "${dest}.bak.$TS"
+  fi
+  # Create parent and copy as root, then chown (simplest + reliable)
+  install -d -m 700 -o "$u" -g "$u" "$(dirname "$dest")"
+  cp -a --no-preserve=ownership "$src" "$dest"
+  chown -R "$u:$u" "$dest"
+  note "Installed: $dest"
+}
+
+# 4) Create base user dir (owned by tony); never touch anything outside ~/.config/blender
+install -d -m 700 -o "$TONY" -g "$TONY" "$DEST_BASE"
+
+# 5) Copy user payload (each is optional; skipped if missing)
+copy_tree_user "$SRC_CFG"     "$DEST_CFG"     "$TONY"
+copy_tree_user "$SRC_DATA"    "$DEST_DATA"    "$TONY"
+copy_tree_user "$SRC_SCRIPTS" "$DEST_SCRIPTS" "$TONY"
+
+# # 6) ---- App Templates (system + user) ----
+SRC_TEMPLATES="$BLENDER_SRC/bl_app_templates_system"
+
+# System scripts dir (Arch layout): /usr/share/blender/<ver>/scripts
+SYS_SCRIPTS_DIR="/usr/share/blender/$BL_VER/scripts"
+# Fallback (rare): /usr/share/blender/scripts
+[[ -d "$SYS_SCRIPTS_DIR" ]] || SYS_SCRIPTS_DIR="/usr/share/blender/scripts"
+
+SYS_TPL_DIR="$SYS_SCRIPTS_DIR/startup/bl_app_templates_system"
+USR_TPL_DIR="$DEST_SCRIPTS/startup/bl_app_templates_user"
+
+if [[ -d "$SRC_TEMPLATES" ]]; then
+  # ---- System install ----
+  install -d -m 755 -o root -g root "$SYS_SCRIPTS_DIR/startup"
+  # backup if target exists
+  if [[ -e "$SYS_TPL_DIR" ]]; then
+    echo "Backing up $SYS_TPL_DIR -> ${SYS_TPL_DIR}.bak.$TS"
+    mv -f -- "$SYS_TPL_DIR" "${SYS_TPL_DIR}.bak.$TS"
+  fi
+  install -d -m 755 -o root -g root "$SYS_TPL_DIR"
+  cp -a --no-preserve=ownership "$SRC_TEMPLATES"/. "$SYS_TPL_DIR"/
+  chown -R root:root "$SYS_TPL_DIR"
+  find "$SYS_TPL_DIR" -type d -exec chmod 755 {} + >/dev/null 2>&1 || true
+  echo "Installed system app templates to $SYS_TPL_DIR"
+
+  # ---- User install (guarantees visibility for tony even if system path changes) ----
+  install -d -m 700 -o "$TONY" -g "$TONY" "$USR_TPL_DIR"
+  # backup existing user template dir if present
+  if [[ -n "$(find "$USR_TPL_DIR" -mindepth 1 -maxdepth 1 -print -quit 2>/dev/null)" ]]; then
+    echo "Backing up $USR_TPL_DIR -> ${USR_TPL_DIR}.bak.$TS"
+    mv -f -- "$USR_TPL_DIR" "${USR_TPL_DIR}.bak.$TS"
+    install -d -m 700 -o "$TONY" -g "$TONY" "$USR_TPL_DIR"
+  fi
+  cp -a --no-preserve=ownership "$SRC_TEMPLATES"/. "$USR_TPL_DIR"/
+  chown -R "$TONY:$TONY" "$USR_TPL_DIR"
+  echo "Installed user app templates to $USR_TPL_DIR"
+else
+  echo "Note: $SRC_TEMPLATES not found; skipping app templates."
+fi
+
+
+# 7) Done. No environment changes. No XFCE interaction. Just files.
+note "Blender configuration complete for user '$TONY' (version $BL_VER)."
+set -e
+
+# Make sure Tony owns his session-critical files/dirs
+chown tony:tony /home/tony /home/tony/.Xauthority /home/tony/.ICEauthority 2>/dev/null || true
+chown -R tony:tony /home/tony/.config /home/tony/.cache 2>/dev/null || true
+
+# If XFCE still complains, reset his per-user session cache (non-destructive)
+su - tony -c '
+  set -e
+  mkdir -p ~/.cache
+  [ -d ~/.cache/sessions ] && mv ~/.cache/sessions ~/.cache/sessions.bak.$(date +%s)
+'
+
+
 # Set default applications per user (avoid writing to /root)
 echo "Setting default applications per user..."
 for U in "${THEME_USERS[@]}"; do
